@@ -2,20 +2,32 @@
 <html>
 <head>
   <meta charset="UTF-8">
-  <title>Monitor</title>
+  <title>Log Tracker Monitor</title>
+  <style>
+    body { font-family: Arial, sans-serif; margin: 20px; }
+    h2 { margin-bottom: 5px; }
+    input { padding: 5px; width: 300px; }
+    button { padding: 5px 10px; margin-left: 5px; }
+    #realtime { margin: 10px 0; font-weight: bold; }
+    table { border-collapse: collapse; width: 100%; margin-top: 10px; }
+    th, td { border: 1px solid #ccc; padding: 5px; text-align: left; }
+    th { background-color: #f0f0f0; }
+    .pagination { margin-top: 10px; }
+    .pagination button { padding: 3px 8px; margin-right: 5px; }
+  </style>
 </head>
 <body>
 
-<h2>Monitor</h2>
+<h2>Monitor Logs</h2>
 
-<input id="cid" placeholder="client_id">
+<input id="cid" placeholder="Enter client_id">
 <button onclick="start()">Start</button>
 
 <h3>Realtime</h3>
 <div id="realtime">...</div>
 
 <h3>History</h3>
-<table border="1">
+<table>
   <thead>
     <tr>
       <th>Time</th>
@@ -26,58 +38,90 @@
   <tbody id="table"></tbody>
 </table>
 
-<script src="https://cdn.socket.io/4.0.0/socket.io.min.js"></script>
+<div class="pagination">
+  <button onclick="prevPage()">Prev</button>
+  <button onclick="nextPage()">Next</button>
+  Page <span id="page-num">1</span>
+</div>
 
+<script src="https://cdn.socket.io/4.0.0/socket.io.min.js"></script>
 <script>
+const SERVER_URL = "https://log-tracker-server.onrender.com";
+
 let cid = "";
 let socket;
+let historyData = [];
+let currentPage = 1;
+const PAGE_SIZE = 50;
 
 function start() {
-  cid = document.getElementById("cid").value;
+  cid = document.getElementById("cid").value.trim();
+  if (!cid) return alert("Please enter client_id");
 
   socket = io(SERVER_URL);
+
+  socket.on("connect", () => console.log("Connected to server"));
 
   socket.on("new_log", (msg) => {
     if (msg.client_id !== cid) return;
 
     const d = msg.data;
-
     let text = "";
 
     if (d.type === "browser") text = "🌐 " + d.url;
     else if (d.type === "focus") text = "🧠 " + d.app;
+    else text = JSON.stringify(d);
 
     document.getElementById("realtime").innerText = text;
 
-    addRow(d);
+    // Thêm vào historyData đầu tiên
+    historyData.unshift(d);
+    renderPage(currentPage);
   });
 
   loadHistory();
 }
 
 async function loadHistory() {
-  const res = await fetch(SERVER_URL + "/logs/" + cid);
+  const res = await fetch(`${SERVER_URL}/logs/${cid}`);
   const data = await res.json();
+  historyData = data.map(d => d.content || d);
+  currentPage = 1;
+  renderPage(currentPage);
+}
 
+function renderPage(page) {
   const table = document.getElementById("table");
   table.innerHTML = "";
 
-  data.forEach(d => addRow(d.content));
-}
+  const start = (page - 1) * PAGE_SIZE;
+  const end = start + PAGE_SIZE;
+  const pageData = historyData.slice(start, end);
 
-function addRow(d) {
-  let detail = d.url || d.app;
-
-  const row = `
-    <tr>
-      <td>${new Date().toLocaleTimeString()}</td>
+  pageData.forEach(d => {
+    const time = new Date(d.timestamp).toLocaleString();
+    const detail = d.url || d.app || JSON.stringify(d);
+    const row = `<tr>
+      <td>${time}</td>
       <td>${d.type}</td>
       <td>${detail}</td>
-    </tr>
-  `;
+    </tr>`;
+    table.insertAdjacentHTML("beforeend", row);
+  });
 
-  document.getElementById("table")
-    .insertAdjacentHTML("afterbegin", row);
+  document.getElementById("page-num").innerText = page;
+}
+
+function nextPage() {
+  if (currentPage * PAGE_SIZE >= historyData.length) return;
+  currentPage++;
+  renderPage(currentPage);
+}
+
+function prevPage() {
+  if (currentPage <= 1) return;
+  currentPage--;
+  renderPage(currentPage);
 }
 </script>
 
