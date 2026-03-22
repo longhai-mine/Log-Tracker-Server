@@ -1,13 +1,14 @@
+# app.py
 import eventlet
-eventlet.monkey_patch()
+eventlet.monkey_patch()  # Phải gọi trước khi import module khác
 
 from flask import Flask, request, jsonify, render_template
 from flask_socketio import SocketIO
-import sqlite3, uuid, json
+import sqlite3, uuid, json, os
 from datetime import datetime
 
 app = Flask(__name__)
-socketio = SocketIO(app, cors_allowed_origins="*")
+socketio = SocketIO(app, cors_allowed_origins="*", async_mode="eventlet")
 
 DB = "db.sqlite3"
 
@@ -15,7 +16,6 @@ DB = "db.sqlite3"
 def init_db():
     conn = sqlite3.connect(DB)
     c = conn.cursor()
-
     c.execute("""
     CREATE TABLE IF NOT EXISTS logs(
         id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -25,7 +25,6 @@ def init_db():
         timestamp TEXT
     )
     """)
-
     conn.commit()
     conn.close()
 
@@ -72,7 +71,7 @@ def logs(cid):
         WHERE client_id=?
         ORDER BY id DESC
         LIMIT 100
-    """)
+    """ , (cid,))
 
     rows = c.fetchall()
     conn.close()
@@ -91,5 +90,7 @@ def logs(cid):
 def index():
     return render_template("index.html")
 
+# ===== RUN =====
 if __name__ == "__main__":
-    socketio.run(app, host="0.0.0.0", port=5000)
+    port = int(os.environ.get("PORT", 5000))  # Render cung cấp port
+    socketio.run(app, host="0.0.0.0", port=port)
