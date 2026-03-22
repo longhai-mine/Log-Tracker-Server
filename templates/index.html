@@ -1,0 +1,85 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="UTF-8">
+  <title>Monitor</title>
+</head>
+<body>
+
+<h2>Monitor</h2>
+
+<input id="cid" placeholder="client_id">
+<button onclick="start()">Start</button>
+
+<h3>Realtime</h3>
+<div id="realtime">...</div>
+
+<h3>History</h3>
+<table border="1">
+  <thead>
+    <tr>
+      <th>Time</th>
+      <th>Type</th>
+      <th>Detail</th>
+    </tr>
+  </thead>
+  <tbody id="table"></tbody>
+</table>
+
+<script src="https://cdn.socket.io/4.0.0/socket.io.min.js"></script>
+
+<script>
+let cid = "";
+let socket;
+
+function start() {
+  cid = document.getElementById("cid").value;
+
+  socket = io(SERVER_URL);
+
+  socket.on("new_log", (msg) => {
+    if (msg.client_id !== cid) return;
+
+    const d = msg.data;
+
+    let text = "";
+
+    if (d.type === "browser") text = "🌐 " + d.url;
+    else if (d.type === "focus") text = "🧠 " + d.app;
+
+    document.getElementById("realtime").innerText = text;
+
+    addRow(d);
+  });
+
+  loadHistory();
+}
+
+async function loadHistory() {
+  const res = await fetch(SERVER_URL + "/logs/" + cid);
+  const data = await res.json();
+
+  const table = document.getElementById("table");
+  table.innerHTML = "";
+
+  data.forEach(d => addRow(d.content));
+}
+
+function addRow(d) {
+  let detail = d.url || d.app;
+
+  const row = `
+    <tr>
+      <td>${new Date().toLocaleTimeString()}</td>
+      <td>${d.type}</td>
+      <td>${detail}</td>
+    </tr>
+  `;
+
+  document.getElementById("table")
+    .insertAdjacentHTML("afterbegin", row);
+}
+</script>
+
+</body>
+</html>
